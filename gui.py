@@ -2,7 +2,8 @@ import customtkinter as ctk
 from tkinter import filedialog
 import os
 from pathlib import Path
-from brain import extract_imports
+from brain import extract_imports, analyze_project
+
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -12,8 +13,10 @@ class ReqGenApp(ctk.CTk):
         super().__init__()
 
         self.title("ReqGen - Dependency Analyzer")
-        self.geometry("650x650")
-        self.filepath = None
+        self.geometry("650x700")
+        
+        self.target_path = None
+        self.is_folder_mode = False
         self.checkbox_objects = [] # Checkboxes ka data store karne ke liye
 
         # --- UI Elements ---
@@ -21,14 +24,17 @@ class ReqGenApp(ctk.CTk):
         self.title_label.pack(pady=15)
 
         # File Selection
-        self.select_btn = ctk.CTkButton(self, text="📂 Select Python File", command=self.select_file)
-        self.select_btn.pack(pady=5)
+        self.file_btn = ctk.CTkButton(self, text="📄 Select Single File", command=self.select_file)
+        self.file_btn.pack(pady=5)
         
-        self.file_label = ctk.CTkLabel(self, text="No file selected", text_color="gray")
+        self.folder_btn = ctk.CTkButton(self, text="📂 Select Project Folder", command=self.select_folder)
+        self.folder_btn.pack(pady=5)
+        
+        self.file_label = ctk.CTkLabel(self, text="No target selected", text_color="gray")
         self.file_label.pack(pady=5)
 
         # 1. Naya Button: Analyze Imports
-        self.analyze_btn = ctk.CTkButton(self, text="🔍 Analyze Imports", command=self.analyze_file, fg_color="#E67E22", hover_color="#D35400")
+        self.analyze_btn = ctk.CTkButton(self, text="🔍 Analyze Imports", command=self.analyze_target, fg_color="#E67E22", hover_color="#D35400")
         self.analyze_btn.pack(pady=10)
 
         # 2. Naya Frame: Scrollable Checkbox Area
@@ -47,57 +53,68 @@ class ReqGenApp(ctk.CTk):
         self.console.pack(pady=10)
         self.console.insert("0.0", "System Ready...\n")
 
+    #Helper method
+    def clear_checkboxes(self):
+        for cb in self.checkbox_objects:
+            cb.destroy()
+        self.checkbox_objects.clear()
+    
     # --- Methods ---
     def log(self, message):
         self.console.insert("end", message + "\n")
         self.console.see("end")
 
     def select_file(self):
-        self.filepath = filedialog.askopenfilename(filetypes=[("Python Files", "*.py")])
-        if self.filepath:
-            filename = os.path.basename(self.filepath)
-            self.file_label.configure(text=filename, text_color="white")
-            self.log(f"Selected: {self.filepath}")
-            
-            # Purane checkboxes saaf karna naya file select hone par
-            for cb in self.checkbox_objects:
-                cb.destroy()
-            self.checkbox_objects.clear()
+        path = filedialog.askopenfilename(filetypes=[("Python Files", "*.py")])
+        if path:
+            self.target_path = path
+            self.is_folder_mode = False
+            self.file_label.configure(text=os.path.basename(path), text_color="white")
+            self.log(f"Selected File: {path}")
+            self.clear_checkboxes()
 
-    def analyze_file(self):
-        if not self.filepath:
-            self.log("❌ Error: Please select a file first.")
+    def select_folder(self):
+        path = filedialog.askdirectory()
+        if path:
+            self.target_path = path
+            self.is_folder_mode = True
+            self.file_label.configure(text=f"Folder: {os.path.basename(path)}", text_color="#F1C40F") # Yellow color for folder
+            self.log(f"Selected Folder: {path}")
+            self.clear_checkboxes()
+
+    def analyze_target(self):
+        if not self.target_path:
+            self.log("❌ Error: Please select a file or folder first.")
             return
             
-        self.log("\n⏳ Analyzing imports...")
-        
-        # Purane checkboxes clear karo (agar user ne do baar analyze dabaya)
-        for cb in self.checkbox_objects:
-            cb.destroy()
-        self.checkbox_objects.clear()
+        self.log("\n⏳ Analyzing dependencies...")
+        self.clear_checkboxes()
             
         try:
-            packages = extract_imports(self.filepath)
+            # 2. Logic: Decide karna ki brain ka kaunsa function chalana hai
+            if self.is_folder_mode:
+                packages = analyze_project(self.target_path)
+            else:
+                packages = extract_imports(self.target_path)
             
             if not packages:
                 self.log("⚠️ No external packages found.")
                 return
                 
-            self.log(f"✅ Found {len(packages)} external packages.")
+            self.log(f"✅ Found {len(packages)} unique external packages.")
             
-            # 3. Har package ke liye ek checkbox banana
             for pkg in packages:
                 cb = ctk.CTkCheckBox(self.scroll_frame, text=pkg)
                 cb.pack(pady=5, anchor="w", padx=20)
-                cb.select() # Default tick mark lagana
+                cb.select()
                 self.checkbox_objects.append(cb)
                 
         except Exception as e:
             self.log(f"❌ Error occurred: {e}")
 
     def generate_reqs(self):
-        if not self.filepath:
-            self.log("❌ Error: Please select a Python file.")
+        if not self.target_path:
+            self.log("❌ Error: Please select a target.")
             return
             
         if not self.checkbox_objects:
@@ -118,8 +135,11 @@ class ReqGenApp(ctk.CTk):
         if not output_name.endswith(".txt"):
             output_name += ".txt"
 
-        target_file_path = Path(self.filepath)
-        output_dir = target_file_path.parent
+        if self.is_folder_mode:
+            output_dir = Path(self.target_path)
+        else:
+            output_dir = Path(self.target_path).parent
+            
         final_output_path = output_dir / output_name
 
         try:
@@ -127,10 +147,10 @@ class ReqGenApp(ctk.CTk):
                 for pkg in selected_packages:
                     f.write(pkg + "\n")
 
-            self.log(f"\n🎉 Success! Generated '{output_name}' with {len(selected_packages)} packages.")
+            self.log(f"\n🎉 Success! Generated '{output_name}' at target location.")
             
         except Exception as e:
-            self.log(f"❌ Error occurred: {e}")
+            self.log(f"❌ Error saving file: {e}")
 
 if __name__ == "__main__":
     app = ReqGenApp()

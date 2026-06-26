@@ -1,5 +1,6 @@
 import ast
 import sys
+from pathlib import Path
 
 def extract_imports(filepath):
     print(f"🧠 Scanning file: {filepath}...\n")
@@ -29,20 +30,50 @@ def extract_imports(filepath):
                 imports_found.add(base_name)
 
     third_party_packages = []
+    target_dir = Path(filepath).parent
     for pkg in imports_found:
+        # Check 1: Kya ye built-in module hai?
         is_builtin = pkg in sys.builtin_module_names
         
-        # Check 2: Kya ye Python standard library hai? (jaise 'datetime', 'json')
-        # hasattr check lagaya hai taaki purane Python versions (below 3.10) par script crash na ho
+        # Check 2: Kya ye standard library hai?
         is_stdlib = hasattr(sys, 'stdlib_module_names') and pkg in sys.stdlib_module_names
         
-        # Agar dono nahi hain, toh hi list mein add karo
-        if not is_builtin and not is_stdlib:
+        # Check 3: NAYA LOGIC - Kya ye koi local file ya folder hai? (e.g. brain.py)
+        is_local_file = (target_dir / f"{pkg}.py").exists()
+        is_local_folder = (target_dir / pkg).is_dir()
+        
+        # Agar built-in, stdlib, local file, ya local folder NAHI hai, tabhi add karo
+        if not is_builtin and not is_stdlib and not is_local_file and not is_local_folder:
             third_party_packages.append(pkg)
     
     third_party_packages.sort()
     return third_party_packages
+
+def analyze_project(folder_path):
+    print(f"📁 Scanning entire project folder: {folder_path}...\n")
     
+    # Ek set banayenge taaki poore project mein koi package do baar na aaye
+    all_project_packages = set()
+    
+    # pathlib ka .rglob() folder aur uske andar ke sub-folders mein saari .py files dhoondhta hai
+    python_files = list(Path(folder_path).rglob("*.py"))
+    
+    if not python_files:
+        print("❌ No Python files found in this folder.")
+        return []
+
+    # Har file ko ek-ek karke humare purane 'extract_imports' brain ke paas bhejenge
+    for filepath in python_files:
+        # Har file ke chhante hue packages nikalenge
+        file_packages = extract_imports(filepath)
+        # Unhe main set mein daal denge (duplicates apne aap delete ho jayenge)
+        all_project_packages.update(file_packages)
+        
+    # Set ko wapas sorted list mein badal kar bhej denge
+    final_list = list(all_project_packages)
+    final_list.sort()
+    
+    return final_list    
 
 # 🚀 Test The Brain
 if __name__ == "__main__":
