@@ -1,6 +1,6 @@
 # 🐍 ReqGen - The Smart Python Dependency Analyzer
 
-ReqGen is a lightweight, GUI-powered desktop utility designed for developers and freelancers. It safely parses Python files and entire project directories to automatically generate clean, production-ready `requirements.txt` files—without executing the underlying code.
+ReqGen is a open-source, lightweight, GUI-powered desktop utility designed for developers and freelancers. It safely parses Python files and entire project directories to automatically generate clean, production-ready `requirements.txt` files—without executing the underlying code.
 
 ## 🌟 Why ReqGen?
 Standard tools often rely on basic regex text matching, which accidentally picks up modules from comments or strings. ReqGen uses Python's built-in `ast` (Abstract Syntax Tree) module to structurally analyze code, ensuring 100% accurate extraction. It also intelligently filters out Python Standard Library and C-level built-in modules, outputting only true third-party dependencies.
